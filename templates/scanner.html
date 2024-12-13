@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner carte d'identité - GO Securi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Scanner votre carte d'identité</h1>
+        <video id="video" width="640" height="480" autoplay></video>
+        <button id="snap">Prendre photo</button>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.25/webcam.min.js"></script>
+        <script>
+            const video = document.getElementById('video');
+            const snapButton = document.getElementById('snap');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    video.srcObject = stream;
+                });
+
+            snapButton.addEventListener('click', function() {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/png');
+                
+                // Envoi de l'image à Flask pour traitement
+                fetch('/process_image', {
+                    method: 'POST',
+                    body: JSON.stringify({ image: imageData }),
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.action === 'register') {
+                        // Si l'utilisateur n'est pas enregistré, rediriger vers la page d'enregistrement
+                        window.location.href = "/face_photo";
+                    }
+                });
+            });
+        </script>
+    </div>
+</body>
+</html>

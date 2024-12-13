@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prendre une photo de votre visage - GO Securi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Prendre une photo de votre visage</h1>
+        <video id="video" width="640" height="480" autoplay></video>
+        <button id="snap">Prendre photo</button>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.25/webcam.min.js"></script>
+        <script>
+            const video = document.getElementById('video');
+            const snapButton = document.getElementById('snap');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then((stream) => {
+                    video.srcObject = stream;
+                });
+
+            snapButton.addEventListener('click', function() {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/png');
+                
+                // Envoi de la photo à Flask pour l'enregistrement
+                fetch('/register_face', {
+                    method: 'POST',
+                    body: JSON.stringify({ image: imageData }),
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.action === 'success') {
+                        window.location.href = "/";  // Rediriger vers la page d'accueil après enregistrement
+                    }
+                });
+            });
+        </script>
+    </div>
+</body>
+</html>
