@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enregistrement du visage</title>
+    <style>
+        video, canvas {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+        #snapshot {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Enregistrement du visage</h1>
+    <p>{{ message }}</p>
+
+    <video id="camera" autoplay></video>
+    <canvas id="snapshot" style="display: none;"></canvas>
+
+    <button id="capture">Prendre une photo</button>
+    <form id="photoForm" method="POST" action="{{ url_for('face_photo') }}" enctype="multipart/form-data" style="display: none;">
+        <input type="hidden" name="face" id="photoInput">
+        <button type="submit">Envoyer la photo</button>
+    </form>
+
+    <script>
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('snapshot');
+        const captureButton = document.getElementById('capture');
+        const photoForm = document.getElementById('photoForm');
+        const photoInput = document.getElementById('photoInput');
+
+        // Activer la caméra
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error('Erreur lors de l’accès à la caméra :', error);
+            });
+
+        // Capturer une image
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir l'image en base64
+            const imageData = canvas.toDataURL('image/jpeg');
+            photoInput.value = imageData;
+
+            // Afficher le formulaire pour soumettre la photo
+            photoForm.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
