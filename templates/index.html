@@ -7,9 +7,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Entrée - GO Securi</h1>
-        <button onclick="window.location.href='/scanner'">Scanner ma carte</button>
-    </div>
+    <h1>Bienvenue sur l'application d'entrée - GO Securi</h1>
+    <form action="{{ url_for('scanner') }}" method="get">
+        <button type="submit">Scanner la carte</button>
+    </form>
 </body>
 </html>

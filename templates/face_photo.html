@@ -3,46 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prendre une photo de votre visage - GO Securi</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Enregistrement du visage</title>
+    <style>
+        video, canvas {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+        #snapshot {
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Prendre une photo de votre visage</h1>
-        <video id="video" width="640" height="480" autoplay></video>
-        <button id="snap">Prendre photo</button>
-        <canvas id="canvas" style="display:none;"></canvas>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.25/webcam.min.js"></script>
-        <script>
-            const video = document.getElementById('video');
-            const snapButton = document.getElementById('snap');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then((stream) => {
-                    video.srcObject = stream;
-                });
+    <h1>Enregistrement du visage</h1>
+    <p>{{ message }}</p>
 
-            snapButton.addEventListener('click', function() {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/png');
-                
-                // Envoi de la photo à Flask pour l'enregistrement
-                fetch('/register_face', {
-                    method: 'POST',
-                    body: JSON.stringify({ image: imageData }),
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    if (data.action === 'success') {
-                        window.location.href = "/";  // Rediriger vers la page d'accueil après enregistrement
-                    }
-                });
+    <video id="camera" autoplay></video>
+    <canvas id="snapshot" style="display: none;"></canvas>
+
+    <button id="capture">Prendre une photo</button>
+    <form id="photoForm" method="POST" action="{{ url_for('face_photo') }}" enctype="multipart/form-data" style="display: none;">
+        <input type="hidden" name="face" id="photoInput">
+        <button type="submit">Envoyer la photo</button>
+    </form>
+
+    <script>
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('snapshot');
+        const captureButton = document.getElementById('capture');
+        const photoForm = document.getElementById('photoForm');
+        const photoInput = document.getElementById('photoInput');
+
+        // Activer la caméra
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error('Erreur lors de l’accès à la caméra :', error);
             });
-        </script>
-    </div>
+
+        // Capturer une image
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir l'image en base64
+            const imageData = canvas.toDataURL('image/jpeg');
+            photoInput.value = imageData;
+
+            // Afficher le formulaire pour soumettre la photo
+            photoForm.style.display = 'block';
+        });
+    </script>
 </body>
 </html>

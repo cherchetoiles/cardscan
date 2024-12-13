@@ -1,103 +1,94 @@
+from flask import Flask, render_template, request, redirect, url_for
+import base64
 import cv2
 import numpy as np
-from PIL import Image
-from io import BytesIO
-import base64
-import pytesseract
-from flask import Flask, render_template, request, jsonify
 import sqlite3
+import pytesseract
 import os
-import face_recognition
-
 
 app = Flask(__name__)
 
-# Créer le dossier 'images' si nécessaire
-if not os.path.exists('static/images'):
-    os.makedirs('static/images')
+# Configurations
+DATABASE = 'database.sql'
+IMAGE_FOLDER = 'statics/images'
 
-# Connexion à la base de données SQLite
-def get_db():
-    conn = sqlite3.connect('database.db')
-    return conn
+if not os.path.exists(IMAGE_FOLDER):
+    os.makedirs(IMAGE_FOLDER)
+
+# Fonction pour décoder une image base64 et la sauvegarder
+def decode_image(base64_string, output_path):
+    image_data = base64.b64decode(base64_string.split(",")[1])
+    with open(output_path, "wb") as f:
+        f.write(image_data)
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
-@app.route('/scanner')
+@app.route('/scanner', methods=['GET', 'POST'])
 def scanner():
-    return render_template('scanner.html')
+    if request.method == 'POST':
+        # Sauvegarde de la photo prise
+        image_path = os.path.join(IMAGE_FOLDER, 'captured_id.jpg')
+        decode_image(request.form['photo'], image_path)
 
-@app.route('/process_image', methods=['POST'])
-def process_image():
-    data = request.get_json()
-    image_data = data['image']
-    
-    # Convertir l'image de la carte d'identité
-    img_data = base64.b64decode(image_data.split(',')[1])
-    img = Image.open(BytesIO(img_data))
-    img = np.array(img)
+        # Traitement OCR avec Tesseract
+        text = pytesseract.image_to_string(cv2.imread(image_path))
 
-    # Sauvegarder l'image dans 'static/images'
-    image_path = 'static/images/card_image.png'
-    cv2.imwrite(image_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        # Recherche dans la base de données
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE name = ?", (text.strip(),))
+            user = cursor.fetchone()
 
-    # Utiliser Tesseract pour extraire le texte
-    text = pytesseract.image_to_string(img)
+        if user:
+            return render_template('scanner.html', message=f"Bienvenue, {text.strip()}!")
+        else:
+            return redirect(url_for('face_photo'))
 
-    # Ici on suppose que l'extraction de la carte d'identité retourne un numéro de carte
-    card_number = extract_card_number(text)
+    return render_template('scanner.html', message="Prenez une photo de la carte pour commencer.")
 
-    # Recherche de l'utilisateur dans la base de données
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE card_number=?", (card_number,))
-    user = cursor.fetchone()
+@app.route('/face_photo', methods=['GET', 'POST'])
+def face_photo():
+    if request.method == 'POST':
+        # Sauvegarde de la photo du visage
+        face_image_path = os.path.join(IMAGE_FOLDER, 'captured_face.jpg')
+        decode_image(request.form['face'], face_image_path)
 
-    if user:
-        message = f"Bonjour {user[1]}, nous sommes heureux de vous revoir !"
-        return jsonify({'message': message, 'action': 'welcome'})
-    else:
-        message = "Vous n'êtes pas connu de nos services, souhaitez-vous vous enregistrer ?"
-        return jsonify({'message': message, 'action': 'register'})
+        # Chargement des deux images pour comparaison
+        id_image_path = os.path.join(IMAGE_FOLDER, 'captured_id.jpg')
 
-def extract_card_number(text):
-    # Utilisation d'une méthode basique pour extraire un numéro de carte
-    # Tu peux utiliser une expression régulière ici pour extraire le numéro de carte.
-    return "123456789"  # Exemple de numéro de carte fictif
+        if os.path.exists(id_image_path):
+            id_image = cv2.imread(id_image_path)
+            face_image = cv2.imread(face_image_path)
 
+            # Conversion en échelles de gris
+            id_image_gray = cv2.cvtColor(id_image, cv2.COLOR_BGR2GRAY)
+            face_image_gray = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
 
-@app.route('/register_face', methods=['POST'])
-def register_face():
-    data = request.get_json()
-    face_image_data = data['image']
-    
-    # Convertir la photo du visage
-    img_data = base64.b64decode(face_image_data.split(',')[1])
-    img = Image.open(BytesIO(img_data))
-    img = np.array(img)
+            # Détection et comparaison des features
+            sift = cv2.SIFT_create()
+            keypoints1, descriptors1 = sift.detectAndCompute(id_image_gray, None)
+            keypoints2, descriptors2 = sift.detectAndCompute(face_image_gray, None)
 
-    # Charger la photo de la carte d'identité enregistrée
-    card_image_path = 'static/images/card_image.png'
-    card_image = face_recognition.load_image_file(card_image_path)
-    
-    # Extraire les encodages de visage pour la carte d'identité et la photo de l'utilisateur
-    card_face_encoding = face_recognition.face_encodings(card_image)[0]
-    user_face_encoding = face_recognition.face_encodings(img)[0]
+            bf = cv2.BFMatcher()
+            matches = bf.knnMatch(descriptors1, descriptors2, k=2)
 
-    # Comparer les visages
-    results = face_recognition.compare_faces([card_face_encoding], user_face_encoding)
+            # Filtrage des bons matches
+            good_matches = []
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    good_matches.append(m)
 
-    if results[0]:
-        # Enregistrer l'utilisateur dans la base de données
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (card_number, name) VALUES (?, ?)", ("123456789", "Nom Utilisateur"))
-        conn.commit()
-        return jsonify({'message': 'Enregistrement réussi !', 'action': 'success'})
-    else:
-        return jsonify({'message': 'Les photos ne correspondent pas, veuillez réessayer.', 'action': 'retry'})
-    
+            if len(good_matches) > 10:  # Seuil pour considérer une correspondance
+                return render_template('face_photo.html', message="Les photos correspondent. Enregistrement réussi.")
+            else:
+                return render_template('face_photo.html', message="Erreur : Les photos ne correspondent pas.")
+
+        return render_template('face_photo.html', message="Erreur : Aucune photo de carte ID trouvée.")
+
+    return render_template('face_photo.html', message="Prenez une photo de votre visage pour continuer.")
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
+

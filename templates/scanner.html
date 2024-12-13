@@ -3,47 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner carte d'identité - GO Securi</title>
+    <title>Scanner - GO Securi</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Scanner votre carte d'identité</h1>
-        <video id="video" width="640" height="480" autoplay></video>
-        <button id="snap">Prendre photo</button>
-        <canvas id="canvas" style="display:none;"></canvas>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.25/webcam.min.js"></script>
-        <script>
-            const video = document.getElementById('video');
-            const snapButton = document.getElementById('snap');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then((stream) => {
-                    video.srcObject = stream;
-                });
-
-            snapButton.addEventListener('click', function() {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/png');
-                
-                // Envoi de l'image à Flask pour traitement
-                fetch('/process_image', {
-                    method: 'POST',
-                    body: JSON.stringify({ image: imageData }),
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    if (data.action === 'register') {
-                        // Si l'utilisateur n'est pas enregistré, rediriger vers la page d'enregistrement
-                        window.location.href = "/face_photo";
-                    }
-                });
-            });
-        </script>
+        <h1>Scanner - GO Securi</h1>
+        <!-- Video element to display the camera stream -->
+        <video id="video" width="100%" height="auto" autoplay playsinline></video>
+        <br>
+        <button id="take-photo">Prendre photo</button>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <br>
+        <button id="save-photo">Enregistrer la photo</button>
+        <div id="message"></div>
     </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const takePhotoButton = document.getElementById('take-photo');
+        const savePhotoButton = document.getElementById('save-photo');
+        const canvas = document.getElementById('canvas');
+        const messageDiv = document.getElementById('message');
+
+        // Access the user's camera
+        let videoStream;
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(function(stream) {
+                videoStream = stream;
+                video.srcObject = stream;
+            })
+            .catch(function(error) {
+                messageDiv.textContent = "Erreur d'accès à la caméra.";
+            });
+
+        // Take a photo when the button is clicked
+        takePhotoButton.addEventListener('click', function() {
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+
+            // Set canvas dimensions to match the video size to avoid distortion
+            canvas.width = videoWidth;
+            canvas.height = videoHeight;
+
+            const context = canvas.getContext('2d');
+            // Draw the current video frame to the canvas
+            context.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+            // Optionally show the image on the page
+            const dataUrl = canvas.toDataURL('image/png');
+            messageDiv.innerHTML = `<img src="${dataUrl}" alt="photo prise">`;
+        });
+
+        // Save the photo when the button is clicked
+        savePhotoButton.addEventListener('click', function() {
+            const photoData = canvas.toDataURL('image/png');
+
+            // Here you can send the photo to the server to process it
+            fetch('/save_photo', {
+                method: 'POST',
+                body: JSON.stringify({ photo: photoData }),
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    messageDiv.textContent = "Photo enregistrée et traitée avec succès.";
+                } else {
+                    messageDiv.textContent = "Erreur lors de l'enregistrement de la photo.";
+                }
+            })
+            .catch(error => {
+                messageDiv.textContent = "Erreur de communication avec le serveur.";
+            });
+        });
+    </script>
 </body>
 </html>
