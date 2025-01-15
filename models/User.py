@@ -15,3 +15,14 @@ class User:
             "photo1": self.photo1,
             "photo2": self.photo2,
         }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Crée un objet User à partir d'un dictionnaire."""
+        return cls(
+            first_name=data.get("first_name"),
+            last_name=data.get("last_name"),
+            id_card_number=data.get("id_card_number"),
+            photo1=data.get("photo1"),
+            photo2=data.get("photo2"),
+        )
